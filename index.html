@@ -2,11 +2,29 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Generator Denah Ruangan Ujian</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+/* Load jsPDF dan html2canvas secara eksplisit dan tunggu sampai ready */
+(function() {
+  function loadScript(src, onload) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = onload;
+    s.onerror = function() { console.warn('Gagal load: ' + src); onload && onload(); };
+    document.head.appendChild(s);
+  }
+  window._jspdfReady = false;
+  window._html2canvasReady = false;
+  loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function() {
+    window._jspdfReady = true;
+  });
+  loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', function() {
+    window._html2canvasReady = true;
+  });
+})();
+</script>
 <style>
   :root {
     --primary: #1a3a5c;
@@ -15,9 +33,8 @@
     --shadow: 0 2px 8px rgba(0,0,0,0.12);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); min-height: 100vh; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); min-height: 100vh; overflow-x: hidden; }
 
-  /* TOOLBAR */
   .toolbar {
     background: var(--primary); color: white;
     padding: 10px 16px; display: flex; flex-wrap: wrap;
@@ -45,7 +62,6 @@
   .toolbar input[type="file"] { display: none; }
   .toolbar-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.25); margin: 0 2px; }
 
-  /* Paper badge in toolbar */
   #paper-badge {
     background: rgba(255,255,255,0.15); color: #fff;
     border: 1px solid rgba(255,255,255,0.3);
@@ -53,10 +69,9 @@
     font-size: 11px; font-weight: 700; white-space: nowrap;
   }
 
-  /* MAIN */
-  .main { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+  /* BUG FIX: main overflow-x auto agar tidak terpotong */
+  .main { max-width: 1200px; margin: 24px auto; padding: 0 16px; overflow-x: auto; }
 
-  /* MODAL BASE */
   .modal-overlay {
     display: none; position: fixed; inset: 0;
     background: rgba(0,0,0,0.55); z-index: 200;
@@ -85,19 +100,13 @@
   .btn-save   { background: var(--primary); color: white; padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
   .btn-cancel { background: #eee; color: #555; padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
 
-  /* ===== PAPER MODAL ===== */
   .paper-modal { width: 640px; }
-
   .paper-section-title {
     font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 1px; color: #888; margin: 16px 0 10px;
     border-bottom: 1px solid #eee; padding-bottom: 5px;
   }
-
-  /* Size card grid */
-  .paper-size-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px;
-  }
+  .paper-size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
   .paper-size-card {
     border: 2px solid #e0e0e0; border-radius: 8px;
     padding: 8px 6px; cursor: pointer; text-align: center;
@@ -106,15 +115,10 @@
   }
   .paper-size-card:hover { border-color: var(--accent); background: #e8f4fd; }
   .paper-size-card.selected { border-color: var(--primary); background: #ddeeff; box-shadow: 0 0 0 2px #2980b9; }
-  .paper-size-card .ps-thumb {
-    border: 1.5px solid #bbb; background: white;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 7px; color: #888; position: relative;
-  }
+  .paper-size-card .ps-thumb { border: 1.5px solid #bbb; background: white; display: flex; align-items: center; justify-content: center; font-size: 7px; color: #888; }
   .paper-size-card .ps-name { font-size: 11.5px; font-weight: 700; color: var(--primary); }
   .paper-size-card .ps-dim  { font-size: 9.5px; color: #888; }
 
-  /* Orientation */
   .orient-row { display: flex; gap: 10px; margin-bottom: 4px; }
   .orient-card {
     flex: 1; border: 2px solid #e0e0e0; border-radius: 8px;
@@ -124,52 +128,38 @@
   }
   .orient-card:hover { border-color: var(--accent); background: #e8f4fd; }
   .orient-card.selected { border-color: var(--primary); background: #ddeeff; box-shadow: 0 0 0 2px #2980b9; }
-  .orient-card .oc-thumb {
-    border: 2px solid #aaa; background: white; margin: 0 auto;
-  }
+  .orient-card .oc-thumb { border: 2px solid #aaa; background: white; margin: 0 auto; }
   .orient-card .oc-label { font-size: 12px; font-weight: 700; color: var(--primary); }
 
-  /* Margin sliders */
   .margin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
   .margin-row { display: flex; flex-direction: column; gap: 3px; }
   .margin-row label { font-size: 12px; font-weight: 600; color: #555; display: flex; justify-content: space-between; }
   .margin-row label span { font-weight: 700; color: var(--primary); }
   .margin-row input[type=range] { accent-color: var(--primary); width: 100%; }
 
-  /* Scale sliders */
   .scale-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
   .scale-row label { font-size: 12.5px; font-weight: 600; color: #555; min-width: 110px; }
   .scale-row input[type=range] { flex: 1; accent-color: var(--primary); }
   .scale-row .scale-val { font-size: 13px; font-weight: 700; color: var(--primary); width: 42px; text-align: right; }
 
-  /* Paper preview box */
   .paper-preview-wrap {
     background: #f0f4f8; border-radius: 10px; padding: 14px;
     display: flex; align-items: center; justify-content: center;
-    gap: 18px; margin-top: 14px;
+    gap: 18px; margin-top: 14px; flex-wrap: wrap;
   }
   #paperPreviewSvg { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18)); }
   .paper-preview-info { font-size: 12px; color: #444; line-height: 1.9; }
   .paper-preview-info strong { color: var(--primary); }
 
-  /* Misc toggle */
   .toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .toggle-row label { font-size: 12.5px; font-weight: 600; color: #444; flex: 1; }
-  .toggle-switch { position: relative; width: 36px; height: 20px; }
+  .toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
   .toggle-switch input { opacity: 0; width: 0; height: 0; }
-  .toggle-slider {
-    position: absolute; inset: 0; background: #ccc; border-radius: 20px;
-    cursor: pointer; transition: background 0.2s;
-  }
-  .toggle-slider:before {
-    content:''; position: absolute; width: 14px; height: 14px;
-    left: 3px; top: 3px; background: white; border-radius: 50%;
-    transition: transform 0.2s;
-  }
+  .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+  .toggle-slider:before { content:''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.2s; }
   .toggle-switch input:checked + .toggle-slider { background: var(--primary); }
   .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); }
 
-  /* ORDER MODAL */
   .order-modal { width: 680px; }
   .order-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
   .order-option {
@@ -182,26 +172,26 @@
   .order-option .opt-title { font-size: 11.5px; font-weight: 700; color: var(--primary); margin-bottom: 7px; }
   .order-option .opt-desc  { font-size: 10px; color: #666; margin-top: 5px; line-height: 1.4; }
   .mini-grid { display: grid; gap: 3px; margin: 0 auto; width: fit-content; }
-  .mini-cell {
-    width: 17px; height: 17px; border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 7.5px; font-weight: 800; color: white;
-  }
+  .mini-cell { width: 17px; height: 17px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 7.5px; font-weight: 800; color: white; }
   .order-cols-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   .order-cols-row label { font-size: 13px; font-weight: 600; color: #444; }
   .order-cols-row input[type=range] { flex: 1; accent-color: var(--primary); }
   .order-cols-row span { font-size: 13px; font-weight: 700; color: var(--primary); width: 22px; text-align: center; }
 
-  /* ROOMS */
+  /* ===== ROOM CARDS =====
+     BUG FIX: max-width:100% + overflow-x:auto agar tidak terpotong di layar kecil */
   #rooms-container { display: flex; flex-direction: column; gap: 36px; }
-
   .room-card {
     background: white; border-radius: 10px; box-shadow: var(--shadow);
     overflow: hidden;
+    /* BUG FIX: width diset lewat JS tapi dibatasi max 100% */
+    max-width: 100%;
   }
+  /* Wrapper agar room card bisa scroll horizontal jika lebih lebar dari layar */
+  .room-card-outer { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
   .print-area { padding: 0; }
 
-  /* ---- KOP ---- */
   .kop { border-bottom: 2px solid var(--primary); display: flex; align-items: center; gap: 12px; }
   .kop-logo img { object-fit: contain; }
   .kop-logo-placeholder {
@@ -215,9 +205,9 @@
   .kop-text .sekolah  { font-weight: 700; color: #222; margin: 2px 0; }
   .kop-text .alamat   { color: #555; }
 
-  /* ---- room header ---- */
   .room-header-area {
     display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 6px;
     border-bottom: 1px solid #e0e0e0;
   }
   .room-title { font-weight: 800; color: var(--primary); letter-spacing: 1px; }
@@ -236,6 +226,8 @@
     background: var(--accent); color: white; font-weight: 800;
     letter-spacing: 1px; border-radius: 6px;
     display: flex; align-items: center; gap: 3px;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    transform: rotate(180deg);
   }
   .desk-item { display: flex; flex-direction: column; align-items: center; }
   .desk-label { font-weight: 700; color: #333; text-align: center; line-height: 1.3; }
@@ -257,11 +249,32 @@
   }
   .toast.show { opacity: 1; }
 
+  /* PDF loading overlay */
+  .pdf-loading {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6); z-index: 500;
+    align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+  }
+  .pdf-loading.show { display: flex; }
+  .pdf-loading-box { background: white; border-radius: 14px; padding: 28px 36px; text-align: center; }
+  .pdf-loading-box p { font-size: 15px; font-weight: 600; color: var(--primary); margin-top: 10px; }
+  .pdf-spinner { width: 40px; height: 40px; border: 4px solid #e0e7ef; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    .toolbar { padding: 8px 10px; gap: 6px; }
+    .btn { padding: 5px 8px; font-size: 11px; }
+    .order-grid { grid-template-columns: repeat(2, 1fr); }
+    .paper-size-grid { grid-template-columns: repeat(2, 1fr); }
+    .main { padding: 0 8px; }
+  }
+
   @media print {
     body { background: white; }
     .toolbar { display: none !important; }
     .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
-    .room-card { box-shadow: none !important; border-radius: 0 !important; page-break-after: always; }
+    .room-card-outer { overflow: visible !important; }
+    .room-card { box-shadow: none !important; border-radius: 0 !important; page-break-after: always; max-width: none !important; width: 100% !important; }
     .room-card:last-child { page-break-after: avoid; }
     .desk-seq { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .papan-tulis { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -273,26 +286,27 @@
 <!-- TOOLBAR -->
 <div class="toolbar">
   <h1>📋 DENAH RUANGAN</h1>
-
   <button class="btn btn-upload" onclick="document.getElementById('uploadExcel').click()">📊 Upload Excel</button>
   <input type="file" id="uploadExcel" accept=".xlsx,.xls" onchange="handleExcel(event)">
-
   <button class="btn btn-template" onclick="downloadTemplate()">⬇️ Template</button>
-
   <button class="btn btn-icon" onclick="document.getElementById('uploadIcon').click()">🪑 Icon Meja</button>
   <input type="file" id="uploadIcon" accept="image/*" onchange="handleIcon(event)">
-
   <div class="toolbar-divider"></div>
-
   <button class="btn btn-order" onclick="openOrderModal()">🔀 Urutan Kursi</button>
   <button class="btn btn-kop"   onclick="openKopModal()">🏫 Edit KOP</button>
   <button class="btn btn-paper" onclick="openPaperModal()">📐 Kertas</button>
   <span id="paper-badge">A4 · Portrait</span>
-
   <div class="toolbar-divider"></div>
-
   <button class="btn btn-print" onclick="doCetak()">🖨️ Cetak</button>
   <button class="btn btn-pdf"   onclick="downloadPDF()">📄 PDF</button>
+</div>
+
+<!-- PDF LOADING OVERLAY -->
+<div class="pdf-loading" id="pdfLoading">
+  <div class="pdf-loading-box">
+    <div class="pdf-spinner"></div>
+    <p id="pdfLoadingMsg">Membuat PDF...</p>
+  </div>
 </div>
 
 <!-- ============ KOP MODAL ============ -->
@@ -340,12 +354,8 @@
 <div class="modal-overlay" id="paperModal">
   <div class="modal paper-modal">
     <h2>📐 Pengaturan Kertas &amp; Tampilan</h2>
-
-    <!-- SIZE -->
     <div class="paper-section-title">Ukuran Kertas</div>
     <div class="paper-size-grid" id="paperSizeGrid"></div>
-
-    <!-- CUSTOM SIZE -->
     <div id="customSizeRow" style="display:none;margin-top:8px">
       <div style="display:flex;gap:10px;align-items:center">
         <div class="form-group" style="margin:0;flex:1"><label>Lebar (mm)</label>
@@ -354,8 +364,6 @@
           <input type="number" id="customH" value="297" min="50" max="1000"></div>
       </div>
     </div>
-
-    <!-- ORIENTATION -->
     <div class="paper-section-title">Orientasi</div>
     <div class="orient-row">
       <div class="orient-card selected" id="oc-portrait" onclick="selectOrient('portrait')">
@@ -369,8 +377,6 @@
         <div style="font-size:10px;color:#888">Mendatar</div>
       </div>
     </div>
-
-    <!-- MARGINS -->
     <div class="paper-section-title">Margin (mm)</div>
     <div class="margin-grid">
       <div class="margin-row">
@@ -390,8 +396,6 @@
         <input type="range" id="mr-right" min="0" max="40" value="15" oninput="updateMargin('right',this.value)">
       </div>
     </div>
-
-    <!-- SCALE -->
     <div class="paper-section-title">Skala Tampilan</div>
     <div class="scale-row">
       <label>Ukuran Font</label>
@@ -408,8 +412,6 @@
       <input type="range" id="sc-gap" min="20" max="200" value="100" oninput="updateScale('gap',this.value)">
       <span class="scale-val" id="sv-gap">100%</span>
     </div>
-
-    <!-- MISC TOGGLES -->
     <div class="paper-section-title">Opsi Tampilan</div>
     <div class="toggle-row">
       <label>Tampilkan nomor urut kursi</label>
@@ -427,14 +429,11 @@
       <label>Tampilkan badge urutan kursi</label>
       <label class="toggle-switch"><input type="checkbox" id="tog-badge" checked onchange="renderRoomsIfAny()"><span class="toggle-slider"></span></label>
     </div>
-
-    <!-- PREVIEW -->
     <div class="paper-section-title">Preview Kertas</div>
     <div class="paper-preview-wrap">
       <svg id="paperPreviewSvg" width="80" height="110"></svg>
       <div class="paper-preview-info" id="paperPreviewInfo"></div>
     </div>
-
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closePaperModal()">Batal</button>
       <button class="btn-save"   onclick="applyPaper()">✅ Terapkan</button>
@@ -469,7 +468,6 @@ let roomsData      = {};
 let orderMode      = 'row-lr';
 let numCols        = 4;
 
-// Paper settings (working copy while modal is open)
 let paperCfg = {
   size:        'A4',
   orientation: 'portrait',
@@ -479,9 +477,8 @@ let paperCfg = {
   scale:       { font:100, desk:100, gap:100 },
   show:        { seq:true, nama:true, kop:true, badge:true }
 };
-let paperCfgWork = null; // clone while editing
+let paperCfgWork = null;
 
-// Paper size catalogue
 const PAPER_SIZES = [
   { id:'A3',     name:'A3',     w:297, h:420 },
   { id:'A4',     name:'A4',     w:210, h:297 },
@@ -497,7 +494,7 @@ const PAPER_SIZES = [
 // PAPER MODAL
 // ===================================================
 function openPaperModal() {
-  paperCfgWork = JSON.parse(JSON.stringify(paperCfg)); // deep clone
+  paperCfgWork = JSON.parse(JSON.stringify(paperCfg));
   buildPaperSizeGrid();
   setOrientUI(paperCfgWork.orientation);
   ['top','bottom','left','right'].forEach(s => {
@@ -521,7 +518,6 @@ function openPaperModal() {
 function closePaperModal() { document.getElementById('paperModal').classList.remove('show'); }
 
 function applyPaper() {
-  // read custom dimensions
   if (paperCfgWork.size === 'Custom') {
     paperCfgWork.customW = parseInt(document.getElementById('customW').value) || 210;
     paperCfgWork.customH = parseInt(document.getElementById('customH').value) || 297;
@@ -547,14 +543,13 @@ function buildPaperSizeGrid() {
     const div = document.createElement('div');
     div.className = 'paper-size-card' + (ps.id === paperCfgWork.size ? ' selected' : '');
     div.dataset.id = ps.id;
-    // thumb proportional
     const isPort = (paperCfgWork.orientation === 'portrait');
     const maxH = 36, maxW = 30;
     let tw, th;
     if (ps.w && ps.h) {
       const aspect = ps.w / ps.h;
       if (isPort) { th = maxH; tw = Math.round(th * aspect); }
-      else        { tw = maxH; th = Math.round(tw / aspect); if(th > maxH){th=maxH;tw=Math.round(th*aspect);} }
+      else        { tw = maxH; th = Math.round(tw / aspect); if(th>maxH){th=maxH;tw=Math.round(th*aspect);} }
     } else { tw = 26; th = 34; }
     div.innerHTML = `
       <div class="ps-thumb" style="width:${tw}px;height:${th}px">${ps.id==='Custom'?'✏️':''}</div>
@@ -581,7 +576,6 @@ function setOrientUI(o) {
   document.getElementById('oc-portrait').classList.toggle('selected',  o==='portrait');
   document.getElementById('oc-landscape').classList.toggle('selected', o==='landscape');
 }
-
 function updateMargin(side, val) {
   paperCfgWork.margin[side] = parseInt(val);
   document.getElementById('mv-'+side).textContent = val;
@@ -592,35 +586,31 @@ function updateScale(key, val) {
   document.getElementById('sv-'+key).textContent = val+'%';
 }
 function updateCustomSizeVisibility() {
-  document.getElementById('customSizeRow').style.display =
-    (paperCfgWork.size === 'Custom') ? 'block' : 'none';
+  document.getElementById('customSizeRow').style.display = (paperCfgWork.size==='Custom') ? 'block' : 'none';
 }
-
 function getPaperDimsMM() {
-  const ps = PAPER_SIZES.find(p => p.id === paperCfgWork.size) || PAPER_SIZES[1];
+  const ps = PAPER_SIZES.find(p=>p.id===paperCfgWork.size) || PAPER_SIZES[1];
   let w = ps.w || paperCfgWork.customW || 210;
   let h = ps.h || paperCfgWork.customH || 297;
-  if (paperCfgWork.orientation === 'landscape') [w, h] = [h, w];
+  if (paperCfgWork.orientation === 'landscape') [w,h] = [h,w];
   return { w, h };
 }
-
 function updatePaperPreview() {
   const { w, h } = getPaperDimsMM();
   const m = paperCfgWork.margin;
   const svgEl = document.getElementById('paperPreviewSvg');
-  const maxSvgW = 80, maxSvgH = 110;
+  const maxSvgW=80, maxSvgH=110;
   let svgW, svgH;
   if (w/h > maxSvgW/maxSvgH) { svgW=maxSvgW; svgH=Math.round(svgW*h/w); }
   else                        { svgH=maxSvgH; svgW=Math.round(svgH*w/h); }
   svgEl.setAttribute('width', svgW);
   svgEl.setAttribute('height', svgH);
-  const scaleX = svgW/w, scaleY = svgH/h;
+  const scaleX=svgW/w, scaleY=svgH/h;
   const mt=Math.round(m.top*scaleY), mb=Math.round(m.bottom*scaleY);
   const ml=Math.round(m.left*scaleX), mr2=Math.round(m.right*scaleX);
   svgEl.innerHTML = `
     <rect x="0" y="0" width="${svgW}" height="${svgH}" fill="white" stroke="#aaa" stroke-width="1.5" rx="2"/>
-    <rect x="${ml}" y="${mt}" width="${svgW-ml-mr2}" height="${svgH-mt-mb}"
-          fill="none" stroke="#2980b9" stroke-width="1" stroke-dasharray="3,2"/>
+    <rect x="${ml}" y="${mt}" width="${svgW-ml-mr2}" height="${svgH-mt-mb}" fill="none" stroke="#2980b9" stroke-width="1" stroke-dasharray="3,2"/>
     <text x="${svgW/2}" y="${svgH/2+4}" text-anchor="middle" font-size="8" fill="#ccc" font-family="sans-serif">${w}×${h}</text>`;
   const printW = w - m.left - m.right;
   const printH = h - m.top - m.bottom;
@@ -632,7 +622,6 @@ function updatePaperPreview() {
     <strong>Font:</strong> ${paperCfgWork.scale.font}% &nbsp;
     <strong>Meja:</strong> ${paperCfgWork.scale.desk}%`;
 }
-
 function updatePaperBadge() {
   const badge = document.getElementById('paper-badge');
   const ps = PAPER_SIZES.find(p=>p.id===paperCfg.size)||PAPER_SIZES[1];
@@ -640,7 +629,6 @@ function updatePaperBadge() {
   badge.textContent = `${ps.name} · ${orient}`;
 }
 
-// Apply paper CSS to room cards
 function applyPaperCSS() {
   const cfg = paperCfg;
   const { w, h } = (()=>{
@@ -650,7 +638,6 @@ function applyPaperCSS() {
     return { w:pw, h:ph };
   })();
 
-  // Convert mm to px (96dpi: 1mm ≈ 3.7795px)
   const MM = 3.7795;
   const cardW  = w * MM;
   const m      = cfg.margin;
@@ -658,7 +645,6 @@ function applyPaperCSS() {
   const dScale = cfg.scale.desk  / 100;
   const gScale = cfg.scale.gap   / 100;
 
-  // Base sizes
   const BASE_FONT_KOP     = 15 * fScale;
   const BASE_FONT_INST    = 15 * fScale;
   const BASE_FONT_TITLE   = 20 * fScale;
@@ -674,11 +660,15 @@ function applyPaperCSS() {
   const BASE_HDR_PAD      = Math.round(10 * fScale);
   const BASE_DENAH_PAD    = Math.round(12 * fScale);
 
-  // Inject style
   let styleEl = document.getElementById('paper-dynamic-style');
-  if (!styleEl) { styleEl = document.createElement('style'); styleEl.id='paper-dynamic-style'; document.head.appendChild(styleEl); }
+  if (!styleEl) { styleEl=document.createElement('style'); styleEl.id='paper-dynamic-style'; document.head.appendChild(styleEl); }
+
+  /* BUG FIX:
+     - room-card: width ditentukan tapi max-width: 100% agar tidak melebihi viewport
+     - Tambah min-width pada room-card agar denah tidak hancur saat layar sempit
+  */
   styleEl.textContent = `
-    .room-card { width:${cardW}px; max-width:100%; }
+    .room-card { width:${cardW}px; max-width:100%; min-width:0; }
     .kop { padding:${BASE_KOP_PAD}px ${m.left*MM}px ${BASE_KOP_PAD*0.6}px; }
     .kop-logo img, .kop-logo-placeholder { width:${BASE_LOGO_SIZE}px!important; height:${BASE_LOGO_SIZE}px!important; }
     .kop-text .instansi { font-size:${BASE_FONT_INST}px; }
@@ -687,7 +677,7 @@ function applyPaperCSS() {
     .room-header-area   { padding:${BASE_HDR_PAD}px ${m.left*MM}px; }
     .room-title         { font-size:${BASE_FONT_TITLE}px; }
     .room-order-badge   { font-size:${BASE_FONT_INST*0.74}px; padding:2px 8px; }
-    .denah-wrapper      { padding:${BASE_DENAH_PAD}px ${m.left*MM}px ${BASE_DENAH_PAD*1.5}px; }
+    .denah-wrapper      { padding:${BASE_DENAH_PAD}px ${m.left*MM}px ${BASE_DENAH_PAD*1.5}px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
     .papan-tulis        { font-size:${BASE_FONT_KOP*0.82}px; padding:${BASE_DENAH_PAD*0.55}px; margin-bottom:${BASE_DENAH_PAD}px; }
     .denah-grid         { gap:${BASE_GAP_GRID}px ${BASE_GAP_COL}px; }
     .denah-grid-outer   { gap:${BASE_GAP_COL}px; }
@@ -706,7 +696,7 @@ function renderRoomsIfAny() {
 }
 
 // ===================================================
-// PRINT with paper settings injected
+// PRINT
 // ===================================================
 function doCetak() {
   const cfg = paperCfg;
@@ -714,15 +704,88 @@ function doCetak() {
   let pw = ps.w||cfg.customW||210, ph = ps.h||cfg.customH||297;
   if (cfg.orientation==='landscape') [pw,ph]=[ph,pw];
   const m = cfg.margin;
-
   let printStyle = document.getElementById('print-inject-style');
   if (!printStyle) { printStyle=document.createElement('style'); printStyle.id='print-inject-style'; document.head.appendChild(printStyle); }
-  printStyle.textContent = `
-    @page {
-      size: ${pw}mm ${ph}mm;
-      margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;
-    }`;
+  printStyle.textContent = `@page { size: ${pw}mm ${ph}mm; margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; }`;
   window.print();
+}
+
+// ===================================================
+// PDF - BUG FIX: guard check + better error handling + correct filename
+// ===================================================
+async function downloadPDF() {
+  const rooms = document.querySelectorAll('.room-card');
+  if (!rooms.length) { toast('❌ Tidak ada denah untuk diexport!'); return; }
+
+  // BUG FIX: Cek apakah library sudah terload
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    toast('⏳ Library PDF belum siap, tunggu sebentar lalu coba lagi...');
+    // Coba load ulang
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = function() { toast('✅ Library siap! Silakan klik PDF lagi.'); };
+    s.onerror = function() { toast('❌ Gagal load library PDF. Coba gunakan tombol Cetak/Print.'); };
+    document.head.appendChild(s);
+    return;
+  }
+  if (typeof html2canvas === 'undefined') {
+    toast('⏳ Library html2canvas belum siap. Coba lagi...');
+    return;
+  }
+
+  const loadingEl = document.getElementById('pdfLoading');
+  const msgEl = document.getElementById('pdfLoadingMsg');
+  loadingEl.classList.add('show');
+
+  try {
+    const cfg = paperCfg;
+    const ps  = PAPER_SIZES.find(p=>p.id===cfg.size)||PAPER_SIZES[1];
+    let pw = ps.w||cfg.customW||210, ph = ps.h||cfg.customH||297;
+    if (cfg.orientation==='landscape') [pw,ph]=[ph,pw];
+    const m = cfg.margin;
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: cfg.orientation==='landscape' ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [pw, ph]
+    });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const marginX  = m.left;
+    const marginY  = m.top;
+    const contentW = pdfW - m.left - m.right;
+    const contentH = pdfH - m.top - m.bottom;
+
+    for (let i = 0; i < rooms.length; i++) {
+      msgEl.textContent = `Memproses halaman ${i+1} dari ${rooms.length}...`;
+      const canvas = await html2canvas(rooms[i], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        // BUG FIX: windowWidth eksplisit agar tidak terpotong
+        windowWidth: rooms[i].scrollWidth,
+        width: rooms[i].scrollWidth,
+        height: rooms[i].scrollHeight
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const imgH = Math.min(contentH, canvas.height * contentW / canvas.width);
+      if (i > 0) pdf.addPage([pw, ph], cfg.orientation==='landscape' ? 'landscape' : 'portrait');
+      pdf.addImage(imgData, 'PNG', marginX, marginY, contentW, imgH);
+    }
+
+    // BUG FIX: Nama file eksplisit dengan ekstensi .pdf (bukan .xlsx)
+    const safeSchoolName = kopData.sekolah.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const filename = `denah_ruangan_${safeSchoolName}.pdf`;
+    pdf.save(filename);
+    toast('✅ PDF berhasil didownload!');
+  } catch (err) {
+    console.error('PDF error:', err);
+    toast('❌ Gagal buat PDF: ' + err.message + '. Gunakan tombol Cetak sebagai alternatif.');
+  } finally {
+    loadingEl.classList.remove('show');
+  }
 }
 
 // ===================================================
@@ -740,70 +803,22 @@ const ORDER_MODES = [
   { id:'random',      title:'Acak (Random)',          desc:'Diacak setiap kali diterapkan',          fn:orderRandom },
 ];
 
-function fillGrid(seats, posOrder) {
-  return posOrder.map((pos,i) => i < seats.length ? {seat:seats[i], gridPos:pos} : null);
-}
-function allPos(rows,cols) {
-  const p=[];
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) p.push([r,c]);
-  return p;
-}
+function fillGrid(seats,posOrder){ return posOrder.map((pos,i)=>i<seats.length?{seat:seats[i],gridPos:pos}:null); }
+function allPos(rows,cols){ const p=[]; for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) p.push([r,c]); return p; }
 function orderRowLR(s,c){ return fillGrid(s,allPos(Math.ceil(s.length/c),c)); }
-function orderRowRL(s,c){
-  const r=Math.ceil(s.length/c),p=[];
-  for(let i=0;i<r;i++) for(let j=c-1;j>=0;j--) p.push([i,j]);
-  return fillGrid(s,p);
-}
-function orderColTB(s,c){
-  const r=Math.ceil(s.length/c),p=[];
-  for(let j=0;j<c;j++) for(let i=0;i<r;i++) p.push([i,j]);
-  return fillGrid(s,p);
-}
-function orderColBT(s,c){
-  const r=Math.ceil(s.length/c),p=[];
-  for(let j=0;j<c;j++) for(let i=r-1;i>=0;i--) p.push([i,j]);
-  return fillGrid(s,p);
-}
-function orderZigzagLR(s,c){
-  const r=Math.ceil(s.length/c),p=[];
-  for(let i=0;i<r;i++){
-    if(i%2===0) for(let j=0;j<c;j++) p.push([i,j]);
-    else        for(let j=c-1;j>=0;j--) p.push([i,j]);
-  }
-  return fillGrid(s,p);
-}
-function orderZigzagCol(s,c){
-  const r=Math.ceil(s.length/c),p=[];
-  for(let j=0;j<c;j++){
-    if(j%2===0) for(let i=0;i<r;i++) p.push([i,j]);
-    else        for(let i=r-1;i>=0;i--) p.push([i,j]);
-  }
-  return fillGrid(s,p);
-}
-function spiralPos(rows,cols,startDir){
-  const vis=Array.from({length:rows},()=>Array(cols).fill(false));
-  const dirs=[[0,1],[1,0],[0,-1],[-1,0]];
-  let d=startDir==='down'?1:0,r=0,c=0;
-  const p=[];
-  for(let i=0;i<rows*cols;i++){
-    p.push([r,c]); vis[r][c]=true;
-    let nr=r+dirs[d][0],nc=c+dirs[d][1];
-    if(nr<0||nr>=rows||nc<0||nc>=cols||vis[nr][nc]){d=(d+1)%4;nr=r+dirs[d][0];nc=c+dirs[d][1];}
-    r=nr;c=nc;
-  }
-  return p;
-}
+function orderRowRL(s,c){ const r=Math.ceil(s.length/c),p=[]; for(let i=0;i<r;i++) for(let j=c-1;j>=0;j--) p.push([i,j]); return fillGrid(s,p); }
+function orderColTB(s,c){ const r=Math.ceil(s.length/c),p=[]; for(let j=0;j<c;j++) for(let i=0;i<r;i++) p.push([i,j]); return fillGrid(s,p); }
+function orderColBT(s,c){ const r=Math.ceil(s.length/c),p=[]; for(let j=0;j<c;j++) for(let i=r-1;i>=0;i--) p.push([i,j]); return fillGrid(s,p); }
+function orderZigzagLR(s,c){ const r=Math.ceil(s.length/c),p=[]; for(let i=0;i<r;i++){ if(i%2===0) for(let j=0;j<c;j++) p.push([i,j]); else for(let j=c-1;j>=0;j--) p.push([i,j]); } return fillGrid(s,p); }
+function orderZigzagCol(s,c){ const r=Math.ceil(s.length/c),p=[]; for(let j=0;j<c;j++){ if(j%2===0) for(let i=0;i<r;i++) p.push([i,j]); else for(let i=r-1;i>=0;i--) p.push([i,j]); } return fillGrid(s,p); }
+function spiralPos(rows,cols,startDir){ const vis=Array.from({length:rows},()=>Array(cols).fill(false)); const dirs=[[0,1],[1,0],[0,-1],[-1,0]]; let d=startDir==='down'?1:0,r=0,c=0; const p=[]; for(let i=0;i<rows*cols;i++){ p.push([r,c]); vis[r][c]=true; let nr=r+dirs[d][0],nc=c+dirs[d][1]; if(nr<0||nr>=rows||nc<0||nc>=cols||vis[nr][nc]){d=(d+1)%4;nr=r+dirs[d][0];nc=c+dirs[d][1];} r=nr;c=nc; } return p; }
 function orderSpiralRight(s,c){ return fillGrid(s,spiralPos(Math.ceil(s.length/c),c,'right')); }
-function orderSpiralDown(s,c){  return fillGrid(s,spiralPos(Math.ceil(s.length/c),c,'down'));  }
-function orderRandom(s,c){
-  const r=Math.ceil(s.length/c),p=allPos(r,c);
-  for(let i=p.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[p[i],p[j]]=[p[j],p[i]];}
-  return fillGrid(s,p);
-}
+function orderSpiralDown(s,c){ return fillGrid(s,spiralPos(Math.ceil(s.length/c),c,'down')); }
+function orderRandom(s,c){ const r=Math.ceil(s.length/c),p=allPos(r,c); for(let i=p.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[p[i],p[j]]=[p[j],p[i]];} return fillGrid(s,p); }
 
 function applyOrderToSeats(seats, mode, cols) {
   const mod = ORDER_MODES.find(m=>m.id===mode)||ORDER_MODES[0];
-  const ordered = mod.fn(seats,cols);
+  const ordered = mod.fn(seats, cols);
   const rows = Math.ceil(seats.length/cols);
   const grid = Array.from({length:rows},()=>Array(cols).fill(null));
   ordered.forEach((item,idx)=>{
@@ -814,10 +829,7 @@ function applyOrderToSeats(seats, mode, cols) {
   return {grid,rows,cols};
 }
 
-function getColor(n,total){
-  const t=(n-1)/Math.max(total-1,1);
-  return `rgb(${Math.round(41+t*190)},${Math.round(128-t*52)},${Math.round(185-t*125)})`;
-}
+function getColor(n,total){ const t=(n-1)/Math.max(total-1,1); return `rgb(${Math.round(41+t*190)},${Math.round(128-t*52)},${Math.round(185-t*125)})`; }
 function buildMiniPreview(modeId,cols){
   const N=12, fake=Array.from({length:N},(_,i)=>({id:i}));
   const mod=ORDER_MODES.find(m=>m.id===modeId);
@@ -914,10 +926,8 @@ function downloadTemplate(){
     [1,7009,'Pandu Wicaksono',8009,'Qory Amelia'],[1,7010,'Reza Fardhan',8010,'Sandi Kurniawan'],
     [1,7011,'Tika Wulandari',8011,'Umar Hakim'],[1,7012,'Vina Fitriani',8012,'Wahyu Nugroho'],
     [1,7013,'Xena Mareta',8013,'Yusuf Ibrahim'],[1,7014,'Zahra Amini',8014,'Aditya Bagas'],
-    [1,7015,'Bella Natasya',8015,'Candra Wijaya'],[1,7016,'Diana Fitri',8016,'Evan Maulana'],
-    [1,7017,'Fitria Handayani',8017,'Gilang Saputra'],[1,7018,'Hana Pratiwi',8018,'Ivan Prasetyo'],
-    [1,7019,'Irfan Habibie',8019,'Julia Sari'],[1,7020,'Kevin Ardiansyah',8020,'Laila Nurhayati'],
-    [2,7021,'Miko Saputra',8021,'Nina Fitriya'],[2,7022,'Omar Shiddiq',8022,'Putri Ayu'],
+    [2,7015,'Bella Natasya',8015,'Candra Wijaya'],[2,7016,'Diana Fitri',8016,'Evan Maulana'],
+    [2,7017,'Fitria Handayani',8017,'Gilang Saputra'],[2,7018,'Hana Pratiwi',8018,'Ivan Prasetyo'],
   ];
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws['!cols']=[{wch:8},{wch:10},{wch:20},{wch:10},{wch:20}];
@@ -967,7 +977,13 @@ function renderRooms(){
   container.innerHTML='';
   Object.keys(roomsData)
     .sort((a,b)=>(parseFloat(a)||0)-(parseFloat(b)||0)||a.localeCompare(b))
-    .forEach(ruang=>container.appendChild(buildRoomCard(ruang,roomsData[ruang])));
+    .forEach(ruang=>{
+      /* BUG FIX: Bungkus card dalam outer div yg scrollable horizontal */
+      const outer = document.createElement('div');
+      outer.className = 'room-card-outer';
+      outer.appendChild(buildRoomCard(ruang, roomsData[ruang]));
+      container.appendChild(outer);
+    });
 }
 
 function buildRoomCard(ruang, seats){
@@ -1010,7 +1026,7 @@ function buildRoomCard(ruang, seats){
 
       <div class="room-header-area">
         <div class="room-title">RUANG ${ruang}</div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${showBadge?`<span class="room-order-badge">🔀 ${modeName}</span>`:''}
           <span style="font-size:12px;color:#666">👤 ${seats.length} peserta · ${cols} kolom</span>
         </div>
@@ -1022,7 +1038,7 @@ function buildRoomCard(ruang, seats){
           <div class="denah-grid" style="grid-template-columns:repeat(${cols},1fr)">
             ${desksHtml}
           </div>
-          <div class="masuk-label" style="padding-left:8px">
+          <div style="padding-left:8px;flex-shrink:0">
             <div class="masuk-arrow">MASUK ▶</div>
           </div>
         </div>
@@ -1059,39 +1075,6 @@ function buildSVGDesk(){
 }
 
 // ===================================================
-// PDF
-// ===================================================
-async function downloadPDF(){
-  const rooms=document.querySelectorAll('.room-card');
-  if(!rooms.length){toast('❌ Tidak ada denah!');return;}
-  toast('⏳ Membuat PDF...');
-
-  const cfg=paperCfg;
-  const ps=PAPER_SIZES.find(p=>p.id===cfg.size)||PAPER_SIZES[1];
-  let pw=ps.w||cfg.customW||210, ph=ps.h||cfg.customH||297;
-  if(cfg.orientation==='landscape') [pw,ph]=[ph,pw];
-  const m=cfg.margin;
-
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF({orientation:cfg.orientation==='landscape'?'landscape':'portrait', unit:'mm', format:[pw,ph]});
-  const pdfW=pdf.internal.pageSize.getWidth();
-  const pdfH=pdf.internal.pageSize.getHeight();
-  const marginX=m.left, marginY=m.top;
-  const contentW=pdfW-m.left-m.right;
-  const contentH=pdfH-m.top-m.bottom;
-
-  for(let i=0;i<rooms.length;i++){
-    const canvas=await html2canvas(rooms[i],{scale:2,useCORS:true,backgroundColor:'#ffffff'});
-    const imgData=canvas.toDataURL('image/png');
-    const imgH=Math.min(contentH, canvas.height*contentW/canvas.width);
-    if(i>0) pdf.addPage([pw,ph],cfg.orientation==='landscape'?'landscape':'portrait');
-    pdf.addImage(imgData,'PNG',marginX,marginY,contentW,imgH);
-  }
-  pdf.save(`denah_ruangan_${kopData.sekolah.replace(/\s+/g,'_')}.pdf`);
-  toast('✅ PDF berhasil didownload!');
-}
-
-// ===================================================
 // TOAST
 // ===================================================
 function toast(msg,dur=3000){
@@ -1100,7 +1083,6 @@ function toast(msg,dur=3000){
   setTimeout(()=>el.classList.remove('show'),dur);
 }
 
-// Close modals on overlay click
 ['kopModal','orderModal','paperModal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){
     if(e.target===this) this.classList.remove('show');
