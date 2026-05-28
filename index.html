@@ -59,8 +59,17 @@
   .btn-paper    { background: #34495e; color: white; }
   .btn-print    { background: #16a085; color: white; }
   .btn-pdf      { background: #c0392b; color: white; }
+  .btn-pdf:disabled { opacity: 0.6; cursor: not-allowed; }
   .toolbar input[type="file"] { display: none; }
   .toolbar-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.25); margin: 0 2px; }
+  
+  .pdf-progress-container {
+    width: 100%; height: 6px; background: rgba(255,255,255,0.2);
+    border-radius: 3px; overflow: hidden; margin: 12px 0;
+  }
+  .pdf-progress-bar {
+    height: 100%; background: #27ae60; width: 0%; transition: width 0.3s ease;
+  }
 
   #paper-badge {
     background: rgba(255,255,255,0.15); color: #fff;
@@ -298,14 +307,18 @@
   <span id="paper-badge">A4 · Portrait</span>
   <div class="toolbar-divider"></div>
   <button class="btn btn-print" onclick="doCetak()">🖨️ Cetak</button>
-  <button class="btn btn-pdf"   onclick="downloadPDF()">📄 PDF</button>
+  <button class="btn btn-pdf" id="btnDownloadPdf" onclick="downloadPDF()">📄 PDF</button>
 </div>
 
 <!-- PDF LOADING OVERLAY -->
-<div class="pdf-loading" id="pdfLoading">
+<div class="pdf-loading" id="pdf-overlay">
   <div class="pdf-loading-box">
     <div class="pdf-spinner"></div>
-    <p id="pdfLoadingMsg">Membuat PDF...</p>
+    <div class="pdf-progress-container">
+      <div class="pdf-progress-bar" id="pdf-progress-bar"></div>
+    </div>
+    <p id="pdf-progress-text">0%</p>
+    <p id="pdf-overlay-sub">Membuat PDF...</p>
   </div>
 </div>
 
@@ -713,31 +726,39 @@ function doCetak() {
 // ===================================================
 // PDF - BUG FIX: guard check + better error handling + correct filename
 // ===================================================
+/* ── DOWNLOAD PDF ── */
 async function downloadPDF() {
-  const rooms = document.querySelectorAll('.room-card');
-  if (!rooms.length) { toast('❌ Tidak ada denah untuk diexport!'); return; }
+  const pages = document.querySelectorAll('.room-card');
+  if (!pages.length) return alert('Tidak ada denah untuk di-download. Load data terlebih dahulu!');
 
-  // BUG FIX: Cek apakah library sudah terload
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    toast('⏳ Library PDF belum siap, tunggu sebentar lalu coba lagi...');
-    // Coba load ulang
-    var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    s.onload = function() { toast('✅ Library siap! Silakan klik PDF lagi.'); };
-    s.onerror = function() { toast('❌ Gagal load library PDF. Coba gunakan tombol Cetak/Print.'); };
-    document.head.appendChild(s);
-    return;
-  }
-  if (typeof html2canvas === 'undefined') {
-    toast('⏳ Library html2canvas belum siap. Coba lagi...');
-    return;
+  const btn = document.getElementById('btnDownloadPdf');
+  if (btn) btn.disabled = true;
+
+  const overlay = document.getElementById('pdf-overlay');
+  const progressBar = document.getElementById('pdf-progress-bar');
+  const progressText = document.getElementById('pdf-progress-text');
+  const overlaySub = document.getElementById('pdf-overlay-sub');
+  
+  if (overlay) {
+    overlay.classList.add('show');
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
   }
 
-  const loadingEl = document.getElementById('pdfLoading');
-  const msgEl = document.getElementById('pdfLoadingMsg');
-  loadingEl.classList.add('show');
+  const setProgress = (pct, sub) => {
+    if (progressBar) progressBar.style.width = pct + '%';
+    if (progressText) progressText.textContent = Math.round(pct) + '%';
+    if (sub && overlaySub) overlaySub.textContent = sub;
+  };
 
   try {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error('Library PDF (jsPDF) belum siap.');
+    }
+    if (typeof html2canvas === 'undefined') {
+      throw new Error('Library html2canvas belum siap.');
+    }
+
     const cfg = paperCfg;
     const ps  = PAPER_SIZES.find(p=>p.id===cfg.size)||PAPER_SIZES[1];
     let pw = ps.w||cfg.customW||210, ph = ps.h||cfg.customH||297;
@@ -757,35 +778,74 @@ async function downloadPDF() {
     const contentW = pdfW - m.left - m.right;
     const contentH = pdfH - m.top - m.bottom;
 
-    for (let i = 0; i < rooms.length; i++) {
-      msgEl.textContent = `Memproses halaman ${i+1} dari ${rooms.length}...`;
-      const canvas = await html2canvas(rooms[i], {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const pct = (i / pages.length) * 90;
+      setProgress(pct, `Memproses halaman ${i+1} dari ${pages.length}...`);
+
+      const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        // BUG FIX: windowWidth eksplisit agar tidak terpotong
-        windowWidth: rooms[i].scrollWidth,
-        width: rooms[i].scrollWidth,
-        height: rooms[i].scrollHeight
+        width: page.offsetWidth,
+        height: page.offsetHeight
       });
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const imgH = Math.min(contentH, canvas.height * contentW / canvas.width);
       if (i > 0) pdf.addPage([pw, ph], cfg.orientation==='landscape' ? 'landscape' : 'portrait');
-      pdf.addImage(imgData, 'PNG', marginX, marginY, contentW, imgH);
+      pdf.addImage(imgData, 'JPEG', marginX, marginY, contentW, imgH);
+
+      await new Promise(r => setTimeout(r, 30));
     }
 
-    // BUG FIX: Nama file eksplisit dengan ekstensi .pdf (bukan .xlsx)
-    const safeSchoolName = kopData.sekolah.replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const filename = `denah_ruangan_${safeSchoolName}.pdf`;
-    pdf.save(filename);
+    setProgress(95, 'Menyimpan file PDF...');
+    await new Promise(r => setTimeout(r, 100));
+
+    const safeSchoolName = kopData.sekolah.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
+    const fileName = `denah_ruangan_${safeSchoolName}.pdf`;
+    const pdfBase64 = pdf.output('datauristring').split(',')[1];
+    universalDownload(pdfBase64, 'application/pdf', fileName);
+
+    setProgress(100, 'Selesai!');
+    await new Promise(r => setTimeout(r, 600));
     toast('✅ PDF berhasil didownload!');
-  } catch (err) {
-    console.error('PDF error:', err);
-    toast('❌ Gagal buat PDF: ' + err.message + '. Gunakan tombol Cetak sebagai alternatif.');
+  } catch(err) {
+    console.error(err);
+    toast('❌ Gagal membuat PDF: ' + err.message);
+    alert('Gagal membuat PDF: ' + err.message);
   } finally {
-    loadingEl.classList.remove('show');
+    if (overlay) overlay.classList.remove('show');
+    if (btn) btn.disabled = false;
   }
+}
+
+/* ── DOWNLOAD UNIVERSAL (WebView Android-safe) ── */
+function universalDownload(base64Data, mimeType, fileName) {
+  const pureB64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+
+  if (window.AndroidInterface && typeof window.AndroidInterface.downloadBase64File === 'function') {
+    try {
+      window.AndroidInterface.downloadBase64File(pureB64, fileName, mimeType);
+      return true;
+    } catch(e) { /* lanjut ke fallback */ }
+  }
+
+  const dataURI = 'data:' + mimeType + ';base64,' + pureB64;
+  try {
+    const a = document.createElement('a');
+    a.href = dataURI;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => document.body.removeChild(a), 500);
+    return true;
+  } catch(e) { /* lanjut ke fallback */ }
+
+  window.location.href = dataURI;
+  return true;
 }
 
 // ===================================================
