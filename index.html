@@ -976,23 +976,16 @@ function handleIcon(e){
 // TEMPLATE EXCEL
 // ===================================================
 function downloadTemplate(){
-  const wb=XLSX.utils.book_new();
-  const data=[
-    ['ruang','no_kelas7','nama7','no_kelas8','nama8'],
-    [1,7001,'Ahmad Fauzi',8001,'Budi Santoso'],[1,7002,'Siti Rahayu',8002,'Dewi Lestari'],
-    [1,7003,'Rizky Pratama',8003,'Eka Putri'],[1,7004,'Nurul Hidayah',8004,'Fajar Setiawan'],
-    [1,7005,'Hendra Gunawan',8005,'Indah Permata'],[1,7006,'Joko Widodo',8006,'Kartika Sari'],
-    [1,7007,'Lina Marlina',8007,'Mahmud Syarif'],[1,7008,'Nanda Putra',8008,'Oktavia Dewi'],
-    [1,7009,'Pandu Wicaksono',8009,'Qory Amelia'],[1,7010,'Reza Fardhan',8010,'Sandi Kurniawan'],
-    [1,7011,'Tika Wulandari',8011,'Umar Hakim'],[1,7012,'Vina Fitriani',8012,'Wahyu Nugroho'],
-    [1,7013,'Xena Mareta',8013,'Yusuf Ibrahim'],[1,7014,'Zahra Amini',8014,'Aditya Bagas'],
-    [2,7015,'Bella Natasya',8015,'Candra Wijaya'],[2,7016,'Diana Fitri',8016,'Evan Maulana'],
-    [2,7017,'Fitria Handayani',8017,'Gilang Saputra'],[2,7018,'Hana Pratiwi',8018,'Ivan Prasetyo'],
-  ];
-  const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:8},{wch:10},{wch:20},{wch:10},{wch:20}];
-  XLSX.utils.book_append_sheet(wb,ws,'Data');
-  XLSX.writeFile(wb,'template_denah_ruangan.xlsx');
+  // Template langsung diunduh dari Google Drive
+  const FILE_ID='1S_fVRnpwwoaWTuGxtpLXkqUfwX3LsFGX';
+  const url='https://drive.google.com/uc?export=download&id='+FILE_ID;
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='template_denah_ruangan.xlsx';
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   toast('✅ Template didownload!');
 }
 
